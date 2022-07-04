@@ -23,7 +23,13 @@ short sampleBuffer[512];
 // Number of audio samples read
 volatile int samplesRead;
 
+long lastPrint = millis();
+
 void setup() {
+  
+  digitalWrite(LED_PWR, LOW);
+  
+  
   Serial.begin(9600);
   while (!Serial);
 
@@ -58,12 +64,17 @@ void loop() {
             if(zeroCrossDelay < 1) {
               zeroCrossDelay = newZeroCrossDelay;
             }
-            Serial.println((int)(SAMPLE_RATE / ((zeroCrossDelay + newZeroCrossDelay) / 2.0)));
+            long now = millis();
+            if(now - lastPrint > 500) {
+              // Print measured frequency in Hz
+              Serial.println((int)(SAMPLE_RATE / ((zeroCrossDelay + newZeroCrossDelay) / 2.0)));
+              lastPrint = now;
+            }
             zeroCrossDelay = newZeroCrossDelay;
           }
       }
     }
-
+    
     // Clear the read count
     samplesRead = 0;
   }
