@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<!-- saved from url=(0106)file:///home/nicolas/Downloads/Web%20Bluetooth%20_%20Read%20Characteristic%20Value%20Changed%20Sample.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="description" content="Sample illustrating the use of Web Bluetooth / Read Characteristic Value Changed.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <title>Web Bluetooth / Read Characteristic Value Changed Sample</title>
+    <script>
+      // Add a global error event listener early on in the page load, to help ensure that browsers
+      // which don't support specific functionality still end up displaying a meaningful message.
+      window.addEventListener('error', function(error) {
+        if (ChromeSamples && ChromeSamples.setStatus) {
+          console.error(error);
+          ChromeSamples.setStatus(error.message + ' (Your browser may not support this feature.)');
+          error.preventDefault();
+        }
+      });
+    </script>
+    
+    
+    
+    
+    <link rel="icon" href="./demo_files/icon.png">
+    
+    <link rel="stylesheet" href="./demo_files/main.css">
+    
+    
+  </head>
+
+  <body>
+    <img class="pageIcon" src="./demo_files/icon.png">
+    <h1>Web Bluetooth / Read Characteristic Value Changed Sample</h1>
+    <p class="availability">
+      Available in <a target="_blank" href="https://www.chromestatus.com/feature/5264933985976320">Chrome 48+</a> |
+      <a target="_blank" href="https://github.com/googlechrome/samples/blob/gh-pages/web-bluetooth/read-characteristic-value-changed.html">View on GitHub</a> |
+      <a href="https://googlechrome.github.io/samples/web-bluetooth/index.html">Browse Samples</a>
+    </p>
+    <p>The <a href="https://developers.google.com/web/updates/2015/07/interact-with-ble-devices-on-the-web">Web Bluetooth
+  API</a> lets websites discover and communicate with devices over the
+Bluetooth 4 wireless standard using the Generic Attribute Profile (GATT). It is
+currently partially implemented in Android M, Chrome OS, Mac, and Windows 10.</p>
+
+<script>
+  if('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js');
+  }
+</script>
+
+<script>
+  window.addEventListener('DOMContentLoaded', function() {
+    const searchParams = new URL(location).searchParams;
+    const inputs = Array.from(document.querySelectorAll('input[id]'));
+
+    inputs.forEach(input => {
+      if (searchParams.has(input.id)) {
+        if (input.type == 'checkbox') {
+          input.checked = searchParams.get(input.id);
+        } else {
+          input.value = searchParams.get(input.id);
+          input.blur();
+        }
+      }
+      if (input.type == 'checkbox') {
+        input.addEventListener('change', function(event) {
+          const newSearchParams = new URL(location).searchParams;
+          if (event.target.checked) {
+            newSearchParams.set(input.id, event.target.checked);
+          } else {
+            newSearchParams.delete(input.id);
+          }
+          history.replaceState({}, '', Array.from(newSearchParams).length ?
+              location.pathname + '?' + newSearchParams : location.pathname);
+        });
+      } else {
+        input.addEventListener('input', function(event) {
+          const newSearchParams = new URL(location).searchParams;
+          if (event.target.value) {
+            newSearchParams.set(input.id, event.target.value);
+          } else {
+            newSearchParams.delete(input.id);
+          }
+          history.replaceState({}, '', Array.from(newSearchParams).length ?
+              location.pathname + '?' + newSearchParams : location.pathname);
+        });
+      }
+    });
+  });
+</script>
+
+
+<p>This sample illustrates the use of the Web Bluetooth API to read battery
+level and be notified of changes from a nearby Bluetooth Device advertising
+Battery information with Bluetooth Low Energy. You may want
+to try this demo with the BLE Peripheral
+Simulator App from the <a target="_blank" href="https://play.google.com/store/apps/details?id=io.github.webbluetoothcg.bletestperipheral">Google
+Play Store</a> and check out the <a href="https://googlechrome.github.io/samples/web-bluetooth/read-characteristic-value-changed-async-await.html">Read Characteristic Value Changed
+Sample (Async Await)</a> sample.</p>
+
+<p>Here, we use the <code>characteristicvaluechanged</code> event listener to
+handle reading battery level characteristic value. This event listener will
+optionally handle upcoming notifications as well.</p>
+
+<button id="readBatteryLevel">Read Bluetooth Device's Battery Level</button>
+<button id="startNotifications" disabled="">Start Notifications</button>
+<button id="stopNotifications" disabled="">Stop Notifications</button>
+<button id="reset">Reset Bluetooth Device</button>
+
+<script>
+  var ChromeSamples = {
+    log: function() {
+      var line = Array.prototype.slice.call(arguments).map(function(argument) {
+        return typeof argument === 'string' ? argument : JSON.stringify(argument);
+      }).join(' ');
+
+      document.querySelector('#log').textContent += line + '\n';
+    },
+
+    clearLog: function() {
+      document.querySelector('#log').textContent = '';
+    },
+
+    setStatus: function(status) {
+      document.querySelector('#status').textContent = status;
+    },
+
+    setContent: function(newContent) {
+      var content = document.querySelector('#content');
+      while(content.hasChildNodes()) {
+        content.removeChild(content.lastChild);
+      }
+      content.appendChild(newContent);
+    }
+  };
+</script>
+
+<h3>Live Output</h3>
+<div id="output" class="output">
+  <div id="content"></div>
+  <div id="status"></div>
+  <pre id="log">
+</pre>
+</div>
+
+
+<script>
+  if (/Chrome\/(\d+\.\d+.\d+.\d+)/.test(navigator.userAgent)){
+    // Let's log a warning if the sample is not supposed to execute on this
+    // version of Chrome.
+    if (48 > parseInt(RegExp.$1)) {
+      ChromeSamples.setStatus('Warning! Keep in mind this sample has been tested with Chrome ' + 48 + '.');
+    }
+  }
+</script>
+
+
+
+
+  
+    
+      <script>var bluetoothDevice;
+var batteryLevelCharacteristic;
+
+function onReadBatteryLevelButtonClick() {
+  return (bluetoothDevice ? Promise.resolve() : requestDevice({
+  acceptAllDevices: true,
+      optionalServices: ['19b10000-e8f2-537e-4f6c-d104768a1214']
+      }))
+  .then(connectDeviceAndCacheCharacteristics)
+  .then(_ => {
+    log('Reading Battery Level...');
+    return batteryLevelCharacteristic.readValue();
+  })
+  .catch(error => {
+    log('Argh! ' + error);
+  });
+}
+
+function requestDevice() {
+  log('Requesting any Bluetooth Device...');
+  return navigator.bluetooth.requestDevice({
+   // filters: [...] <- Prefer filters to save energy & show relevant devices.
+      acceptAllDevices: true,
+      optionalServices: ['battery_service']})
+  .then(device => {
+    bluetoothDevice = device;
+    bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+  });
+}
+
+function connectDeviceAndCacheCharacteristics() {
+  if (bluetoothDevice.gatt.connected && batteryLevelCharacteristic) {
+    return Promise.resolve();
+  }
+
+  log('Connecting to GATT Server...');
+  return bluetoothDevice.gatt.connect()
+  .then(server => {
+    log('Getting Battery Service...');
+    return server.getPrimaryService('19b10000-e8f2-537e-4f6c-d104768a1214');
+  })
+  .then(service => {
+    log('Getting Battery Level Characteristic...');
+    return service.getCharacteristic('19b10001-e8f2-537e-4f6c-d104768a1214');
+  })
+  .then(characteristic => {
+    batteryLevelCharacteristic = characteristic;
+    batteryLevelCharacteristic.addEventListener('characteristicvaluechanged',
+        handleBatteryLevelChanged);
+    document.querySelector('#startNotifications').disabled = false;
+    document.querySelector('#stopNotifications').disabled = true;
+  });
+}
+
+/* This function will be called when `readValue` resolves and
+ * characteristic value changes since `characteristicvaluechanged` event
+ * listener has been added. */
+function handleBatteryLevelChanged(event) {
+  let batteryLevel = event.target.value.getUint8(0);
+  log('> Battery Level is ' + batteryLevel + '%');
+}
+
+function onStartNotificationsButtonClick() {
+  log('Starting Battery Level Notifications...');
+  batteryLevelCharacteristic.startNotifications()
+  .then(_ => {
+    log('> Notifications started');
+    document.querySelector('#startNotifications').disabled = true;
+    document.querySelector('#stopNotifications').disabled = false;
+  })
+  .catch(error => {
+    log('Argh! ' + error);
+  });
+}
+
+function onStopNotificationsButtonClick() {
+  log('Stopping Battery Level Notifications...');
+  batteryLevelCharacteristic.stopNotifications()
+  .then(_ => {
+    log('> Notifications stopped');
+    document.querySelector('#startNotifications').disabled = false;
+    document.querySelector('#stopNotifications').disabled = true;
+  })
+  .catch(error => {
+    log('Argh! ' + error);
+  });
+}
+
+function onResetButtonClick() {
+  if (batteryLevelCharacteristic) {
+    batteryLevelCharacteristic.removeEventListener('characteristicvaluechanged',
+        handleBatteryLevelChanged);
+    batteryLevelCharacteristic = null;
+  }
+  // Note that it doesn't disconnect device.
+  bluetoothDevice = null;
+  log('> Bluetooth Device reset');
+}
+
+function onDisconnected() {
+  log('> Bluetooth Device disconnected');
+  connectDeviceAndCacheCharacteristics()
+  .catch(error => {
+    log('Argh! ' + error);
+  });
+}
+</script>
+    
+  
+
+
+<script>
+  document.querySelector('#readBatteryLevel').addEventListener('click', function() {
+    if (isWebBluetoothEnabled()) {
+      onReadBatteryLevelButtonClick();
+    }
+  });
+
+  document.querySelector('#startNotifications').addEventListener('click', function(event) {
+    if (isWebBluetoothEnabled()) {
+      onStartNotificationsButtonClick();
+    }
+  });
+
+  document.querySelector('#stopNotifications').addEventListener('click', function(event) {
+    if (isWebBluetoothEnabled()) {
+      onStopNotificationsButtonClick();
+    }
+  });
+
+  document.querySelector('#reset').addEventListener('click', function(event) {
+    if (isWebBluetoothEnabled()) {
+      ChromeSamples.clearLog();
+      onResetButtonClick();
+    }
+  });
+</script>
+
+<script>
+  log = ChromeSamples.log;
+
+  function isWebBluetoothEnabled() {
+    if (navigator.bluetooth) {
+      return true;
+    } else {
+      ChromeSamples.setStatus('Web Bluetooth API is not available.\n' +
+          'Please make sure the "Experimental Web Platform features" flag is enabled.');
+      return false;
+    }
+  }
+</script>
+
+
+
+</body></html>
