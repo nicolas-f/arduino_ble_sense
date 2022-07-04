@@ -25,6 +25,8 @@ volatile int samplesRead;
 
 long lastPrint = millis();
 
+int measured_frequency = 0;
+
 void setup() {
   
   digitalWrite(LED_PWR, LOW);
@@ -45,38 +47,11 @@ void setup() {
   }
 }
 
-void loop() {
-  // Wait for samples to be read
-  if (samplesRead) {
-    double zeroCrossSample = 0;
-    double zeroCrossDelay = 0;
-
-    // Print samples to the serial monitor or plotter
-    for (int i = 1; i < samplesRead; i++) {      
-      const short previous = sampleBuffer[i-1];
-      const short current = sampleBuffer[i];
-      if (previous >= 0 && current < 0) {
-          // evaluate Tzc
-          double oldZeroCross = zeroCrossSample;
-          zeroCrossSample = (i - 1) + ((double)previous / (previous - current));
-          if(oldZeroCross > 0) {
-            double newZeroCrossDelay = zeroCrossSample - oldZeroCross;
-            if(zeroCrossDelay < 1) {
-              zeroCrossDelay = newZeroCrossDelay;
-            }
-            long now = millis();
-            if(now - lastPrint > 500) {
-              // Print measured frequency in Hz
-              Serial.println((int)(SAMPLE_RATE / ((zeroCrossDelay + newZeroCrossDelay) / 2.0)));
-              lastPrint = now;
-            }
-            zeroCrossDelay = newZeroCrossDelay;
-          }
-      }
-    }
-    
-    // Clear the read count
-    samplesRead = 0;
+void loop() {  
+  long now = millis();
+  if(now - lastPrint > 125) {
+    Serial.println(measured_frequency);
+    lastPrint = now;
   }
 }
 
@@ -94,4 +69,30 @@ void onPDMdata() {
 
   // 16-bit, 2 bytes per sample
   samplesRead = bytesAvailable / 2;
+  
+  double zeroCrossSample = 0;
+  double zeroCrossDelay = 0;
+
+  // Print samples to the serial monitor or plotter
+  for (int i = 1; i < samplesRead; i++) {      
+    const short previous = sampleBuffer[i-1];
+    const short current = sampleBuffer[i];
+    if (previous >= 0 && current < 0) {
+        // evaluate Tzc
+        double oldZeroCross = zeroCrossSample;
+        zeroCrossSample = (i - 1) + ((double)previous / (previous - current));
+        if(oldZeroCross > 0) {
+          double newZeroCrossDelay = zeroCrossSample - oldZeroCross;
+          if(zeroCrossDelay < 1) {
+            zeroCrossDelay = newZeroCrossDelay;
+          }
+          // Store measured frequency in Hz
+          measured_frequency = (int)round(SAMPLE_RATE / ((zeroCrossDelay + newZeroCrossDelay) / 2.0));
+          zeroCrossDelay = newZeroCrossDelay;
+        }
+    }
+  }
+  
+  // Clear the read count
+  samplesRead = 0;
 }
